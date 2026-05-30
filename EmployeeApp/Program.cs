@@ -16,7 +16,15 @@ namespace EmployeeApp
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new LoginForm());
+
+            while (true)
+            {
+                var login = new LoginForm();
+                Application.Run(login);
+
+                if (!login.IsLogoutRequested)
+                    break;
+            }
         }
     }
 }

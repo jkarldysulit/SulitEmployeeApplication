@@ -1,4 +1,6 @@
-﻿using System;
+﻿using EmployeeApplication;
+using EmployeeInterface;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -62,7 +64,6 @@ namespace EmployeeApp
                 e.Graphics.DrawLine(pen, 0, 77, 720, 77);
         }
 
-
         private void RdoType_Changed(object sender, EventArgs e)
         {
             pnlFullTime.Visible = rdoFullTime.Checked;
@@ -85,30 +86,98 @@ namespace EmployeeApp
             lblError.Text = "";
         }
 
+        private void BtnLogout_Click(object sender, EventArgs e)
+        {
+            DialogResult result = MessageBox.Show(
+                "Are you sure you want to log out?",
+                "Logout Confirmation",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question
+            );
+
+            if (result == DialogResult.Yes)
+            {
+                foreach (Form f in Application.OpenForms)
+                {
+                    if (f is LoginForm login)
+                    {
+                        login.IsLogoutRequested = true;
+                        break;
+                    }
+                }
+                this.Close();
+            }
+        }
+
         private void BtnCompute_Click(object sender, EventArgs e)
         {
             lblError.Text = "";
             try
             {
+  
                 string empId = GetValue(txtEmpId, "e.g. EMP-001");
                 string first = GetValue(txtFirst, "Juan");
                 string last = GetValue(txtLast, "dela Cruz");
                 string pos = GetValue(txtPos, "e.g. Software Engineer");
 
-                if (string.IsNullOrEmpty(empId) || string.IsNullOrEmpty(first) ||
-                    string.IsNullOrEmpty(last) || string.IsNullOrEmpty(pos))
-                    throw new ArgumentException("Please fill in all employee details.");
+                if (string.IsNullOrWhiteSpace(empId))
+                    throw new ArgumentException("Employee ID is required.");
+                if (string.IsNullOrWhiteSpace(first))
+                    throw new ArgumentException("First name is required.");
+                if (string.IsNullOrWhiteSpace(last))
+                    throw new ArgumentException("Last name is required.");
+                if (string.IsNullOrWhiteSpace(pos))
+                    throw new ArgumentException("Position / Job title is required.");
 
-                Payroll employee;
+                if (!System.Text.RegularExpressions.Regex.IsMatch(first, @"^[a-zA-Z\s]+$"))
+                    throw new ArgumentException("First name must contain letters only.");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(last, @"^[a-zA-Z\s]+$"))
+                    throw new ArgumentException("Last name must contain letters only.");
 
-                if (rdoFullTime.Checked)
+                if (rdoPartTime.Checked)
                 {
-                    string monthlyStr = GetValue(txtMonthly, "e.g. 25000");
-                    if (string.IsNullOrEmpty(monthlyStr))
-                        throw new ArgumentException("Monthly rate is required for Full-Time employees.");
+                    string hourlyStr = GetValue(txtHourly, "e.g. 75");
+                    string hoursStr = GetValue(txtHours, "e.g. 80");
 
-                    if (!double.TryParse(monthlyStr, out double monthly) || monthly <= 0)
-                        throw new FormatException("Monthly rate must be a valid positive number.");
+                    if (string.IsNullOrWhiteSpace(hourlyStr))
+                        throw new ArgumentException("Rate per hour is required for Part-Time employees.");
+                    if (string.IsNullOrWhiteSpace(hoursStr))
+                        throw new ArgumentException("Total hours worked is required for Part-Time employees.");
+
+                    if (!double.TryParse(hourlyStr, out double hourly))
+                        throw new FormatException("Rate per hour must be a valid number.");
+                    if (hourly <= 0)
+                        throw new ArgumentException("Rate per hour must be greater than zero.");
+
+                    if (!int.TryParse(hoursStr, out int hours))
+                        throw new FormatException("Total hours worked must be a whole number.");
+                    if (hours < 0)
+                        throw new ArgumentException("Hours worked cannot be negative.");
+                    if (hours > 744)
+                        throw new ArgumentException("Hours worked cannot exceed 744 hours per month.");
+
+                    IEmployee employee = new PartTimeEmployee(first, last, pos, empId);
+                    employee.ComputeSalary(hours, hourly);
+
+                    string displayFirst = employee.FirstName;
+                    string displayLast = employee.LastName;
+                    double displaySalary = employee.BasicSalary;
+
+                    var outputForm = new PayrollOutputForm(
+                        new PartTime(empId, first, last, pos, hourly, hours));
+                    outputForm.ShowDialog(this);
+                }
+                else
+                {
+
+                    string monthlyStr = GetValue(txtMonthly, "e.g. 25000");
+
+                    if (string.IsNullOrWhiteSpace(monthlyStr))
+                        throw new ArgumentException("Monthly rate is required for Full-Time employees.");
+                    if (!double.TryParse(monthlyStr, out double monthly))
+                        throw new FormatException("Monthly rate must be a valid number.");
+                    if (monthly <= 0)
+                        throw new ArgumentException("Monthly rate must be greater than zero.");
 
                     int ovtHrs = 0;
                     double ovtRate = 0;
@@ -116,35 +185,31 @@ namespace EmployeeApp
                     string ovtHrsStr = GetValue(txtOvtHrs, "e.g. 8");
                     string ovtRateStr = GetValue(txtOvtRate, "e.g. 150");
 
-                    if (!string.IsNullOrEmpty(ovtHrsStr))
-                        if (!int.TryParse(ovtHrsStr, out ovtHrs) || ovtHrs < 0)
-                            throw new FormatException("Overtime hours must be a valid non-negative integer.");
+                    if (!string.IsNullOrWhiteSpace(ovtHrsStr))
+                    {
+                        if (!int.TryParse(ovtHrsStr, out ovtHrs))
+                            throw new FormatException("Overtime hours must be a whole number.");
+                        if (ovtHrs < 0)
+                            throw new ArgumentException("Overtime hours cannot be negative.");
+                    }
 
-                    if (!string.IsNullOrEmpty(ovtRateStr))
-                        if (!double.TryParse(ovtRateStr, out ovtRate) || ovtRate < 0)
-                            throw new FormatException("Overtime rate must be a valid non-negative number.");
+                    if (!string.IsNullOrWhiteSpace(ovtRateStr))
+                    {
+                        if (!double.TryParse(ovtRateStr, out ovtRate))
+                            throw new FormatException("Overtime rate must be a valid number.");
+                        if (ovtRate < 0)
+                            throw new ArgumentException("Overtime rate cannot be negative.");
+                    }
 
-                    employee = new FullTime(empId, first, last, pos, monthly, ovtHrs, ovtRate);
+                    if (ovtHrs > 0 && ovtRate == 0)
+                        throw new ArgumentException("Please enter an overtime rate per hour.");
+                    if (ovtRate > 0 && ovtHrs == 0)
+                        throw new ArgumentException("Please enter the number of overtime hours.");
+
+                    var outputForm = new PayrollOutputForm(
+                        new FullTime(empId, first, last, pos, monthly, ovtHrs, ovtRate));
+                    outputForm.ShowDialog(this);
                 }
-                else
-                {
-                    string hourlyStr = GetValue(txtHourly, "e.g. 75");
-                    string hoursStr = GetValue(txtHours, "e.g. 80");
-
-                    if (string.IsNullOrEmpty(hourlyStr) || string.IsNullOrEmpty(hoursStr))
-                        throw new ArgumentException("Hourly rate and hours worked are required for Part-Time employees.");
-
-                    if (!double.TryParse(hourlyStr, out double hourly) || hourly <= 0)
-                        throw new FormatException("Hourly rate must be a valid positive number.");
-
-                    if (!int.TryParse(hoursStr, out int hours) || hours < 0)
-                        throw new FormatException("Hours worked must be a valid non-negative integer.");
-
-                    employee = new PartTime(empId, first, last, pos, hourly, hours);
-                }
-
-                var outputForm = new PayrollOutputForm(employee);
-                outputForm.ShowDialog(this);
             }
             catch (ArgumentException ex) { lblError.Text = "" + ex.Message; }
             catch (FormatException ex) { lblError.Text = "" + ex.Message; }

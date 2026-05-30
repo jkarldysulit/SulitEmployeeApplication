@@ -55,6 +55,7 @@ namespace EmployeeApp
                 }
             };
         }
+        public bool IsLogoutRequested { get; set; } = false;
 
         private string GetValue(TextBox tb, string placeholder)
         {
@@ -103,23 +104,32 @@ namespace EmployeeApp
 
                 lblError.Text = "";
                 var empForm = new frmComputeSalary();
-                empForm.Show();
                 this.Hide();
-                empForm.FormClosed += (s2, e2) => this.Close();
+                empForm.Show();
+                empForm.FormClosed += (s2, e2) =>
+                {
+                    if (!IsLogoutRequested)
+                        this.Close();
+                    else
+                    {
+                        IsLogoutRequested = false;
+                        this.Show();
+                    }
+                };
             }
             catch (ArgumentException ex)
             {
-                lblError.Text = "⚠ " + ex.Message;
+                lblError.Text = "" + ex.Message;
             }
             catch (UnauthorizedAccessException ex)
             {
-                lblError.Text = "✖ " + ex.Message;
+                lblError.Text = "" + ex.Message;
                 SetPlaceholder(txtPassword, PassPlaceholder, true);
                 txtPassword.Focus();
             }
             catch (Exception ex)
             {
-                lblError.Text = "✖ Unexpected error: " + ex.Message;
+                lblError.Text = "Unexpected error: " + ex.Message;
             }
         }
 
